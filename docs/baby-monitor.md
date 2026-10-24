@@ -58,7 +58,7 @@ substitutions:
 packages:
   voice_pe:
     url: https://github.com/mikhailhimei/home-assistant-voice-pe
-    ref: experimental/baby-monitor
+    ref: dev
     files:
       - home-assistant-voice.yaml
       - modules/baby-monitor.yaml
