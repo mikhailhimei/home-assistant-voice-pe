@@ -1,0 +1,166 @@
+# Optional full-duplex calls. Independent from baby-monitor.yaml; Assist stays active.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/mikhailhimei/home-assistant-voice-pe
+      ref: ${voice_pe_audio_ref}
+      path: external_components
+    components: [baby_monitor]
+    refresh: always
+
+baby_monitor:
+  - id: call_uplink
+    host: auto
+    port: 8125
+    node_id: ${name}
+    microphone:
+      microphone: i2s_mics
+      channels: [0]
+    passive: true
+
+media_source:
+  - platform: baby_monitor
+    id: call_http_source
+    buffer_size: 8192
+
+media_player:
+  - id: !extend external_media_player
+    media_pipeline:
+      sources:
+        - call_http_source
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - lambda: |-
+            id(speaker_call_abort) = []() { id(call_end_local).execute(); };
+            id(speaker_call_button) = []() {
+              if (id(call_incoming) && id(call_ringing)) {
+                id(call_ringing) = false;
+                id(call_status).publish_state("answer_requested");
+              } else id(call_end_local).execute();
+            };
+        - text_sensor.template.publish:
+            id: call_status
+            state: idle
+
+globals:
+  - id: call_incoming
+    type: bool
+    initial_value: 'false'
+  - id: call_ringing
+    type: bool
+    initial_value: 'false'
+
+text_sensor:
+  - platform: template
+    id: call_status
+    name: "Звонок"
+    icon: mdi:phone
+    update_interval: never
+
+api:
+  on_client_connected:
+    - lambda: id(call_uplink).learn_server(client_info.c_str(), client_address.c_str());
+  actions:
+    - action: call_configure
+      variables:
+        key: string
+      then:
+        - lambda: id(call_uplink).provision(std::string(key.c_str()));
+    - action: call_ring
+      variables:
+        incoming: bool
+      then:
+        - if:
+            condition:
+              lambda: return !id(baby_monitor_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+            then:
+              - lambda: |-
+                  id(speaker_call_active) = true;
+                  id(call_incoming) = incoming;
+                  id(call_ringing) = true;
+                  id(call_status).publish_state(incoming ? "ringing" : "outgoing");
+              - script.execute: call_ring_tone
+            else:
+              - script.execute: call_end_local
+    - action: call_source
+      then:
+        - if:
+            condition:
+              lambda: return id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state;
+            then:
+              - script.stop: call_ring_tone
+              - lambda: |-
+                  id(call_ringing) = false;
+                  id(call_status).publish_state("connecting");
+                  id(call_uplink).enable();
+            else:
+              - script.execute: call_end_local
+    - action: call_listen
+      variables:
+        url: string
+      then:
+        - if:
+            condition:
+              lambda: return id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state;
+            then:
+              - media_player.play_media:
+                  id: external_media_player
+                  media_url: !lambda return "monitor+" + std::string(url.c_str());
+                  announcement: false
+              - text_sensor.template.publish:
+                  id: call_status
+                  state: active
+            else:
+              - script.execute: call_end_local
+    - action: call_end
+      then:
+        - script.execute: call_end_local
+
+script:
+  - id: call_end_local
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: return id(speaker_call_active);
+          then:
+            - script.stop: call_ring_tone
+            - lambda: |-
+                id(call_uplink).disable();
+                id(call_ringing) = false;
+                id(speaker_call_active) = false;
+            - media_player.stop:
+                id: external_media_player
+                announcement: false
+            - text_sensor.template.publish:
+                id: call_status
+                state: idle
+            - script.execute: control_leds
+  - id: call_ring_tone
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: return id(speaker_call_active) && id(call_ringing);
+          then:
+            - if:
+                condition:
+                  lambda: return id(call_incoming);
+                then:
+                  - script.execute:
+                      id: play_sound
+                      priority: false
+                      sound_file: center_button_double_press_sound
+            - delay: 4s
+
+interval:
+  - interval: 250ms
+    then:
+      - if:
+          condition:
+            lambda: return id(speaker_call_active) && (!id(api_id).is_connected() || id(software_microphone_muted) || id(hardware_mute_switch).state);
+          then:
+            - script.execute: call_end_local

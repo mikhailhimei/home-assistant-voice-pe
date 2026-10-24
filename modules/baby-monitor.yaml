@@ -7,19 +7,19 @@ external_components:
   - source:
       type: git
       url: https://github.com/mikhailhimei/home-assistant-voice-pe
-      ref: dev
+      ref: ${voice_pe_audio_ref}
       path: external_components
     components: [baby_monitor]
     refresh: always
 
 baby_monitor:
-  id: monitor_uplink
-  host: ${baby_monitor_host}
-  port: ${baby_monitor_port}
-  node_id: ${name}
-  microphone:
-    microphone: i2s_mics
-    channels: [0]
+  - id: monitor_uplink
+    host: ${baby_monitor_host}
+    port: ${baby_monitor_port}
+    node_id: ${name}
+    microphone:
+      microphone: i2s_mics
+      channels: [0]
 
 esphome:
   on_boot:
@@ -41,7 +41,7 @@ switch:
     turn_on_action:
       - if:
           condition:
-            lambda: return !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+            lambda: return !id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
           then:
             - if:
                 condition:
@@ -74,7 +74,7 @@ switch:
     turn_on_action:
       - if:
           condition:
-            lambda: return !id(baby_listener_url).empty() && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+            lambda: return !id(speaker_call_active) && !id(baby_listener_url).empty() && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
           then:
             - if:
                 condition:

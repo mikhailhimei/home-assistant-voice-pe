@@ -1,4 +1,5 @@
 substitutions:
+  voice_pe_audio_ref: 56d052a15374e58a72cef3a6b3831669fae6e8e5
   dialog_alarm_entity: sensor.dialog_custom_ui_alarm
   dialog_timer_entity: sensor.dialog_custom_ui_timers
   dialog_timer_device_id: "f78b84553b463617269c25293950bb55"
@@ -137,6 +138,16 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
+  # Optional calls keep Assist active; these hooks are inert without calls.yaml.
+  - id: speaker_call_active
+    type: bool
+    initial_value: 'false'
+  - id: speaker_call_button
+    type: std::function<void()>
+    initial_value: '[]() {}'
+  - id: speaker_call_abort
+    type: std::function<void()>
+    initial_value: '[]() {}'
   # Optional monitor package uses these hooks; normal firmware keeps them inactive.
   - id: baby_monitor_active
     type: bool
@@ -500,9 +511,11 @@ binary_sensor:
         then:
           - if:
               condition:
-                lambda: return id(baby_monitor_active);
+                lambda: return id(baby_monitor_active) || id(speaker_call_active);
               then:
-                - lambda: id(baby_monitor_abort)();
+                - lambda: |-
+                    if (id(speaker_call_active)) id(speaker_call_button)();
+                    else id(baby_monitor_abort)();
               else:
                 - if:
                     condition:
@@ -1252,7 +1265,9 @@ script:
           condition:
             lambda: return id(software_microphone_muted) || id(hardware_mute_switch).state;
           then:
-            - lambda: id(baby_monitor_abort)();
+            - lambda: |-
+                id(speaker_call_abort)();
+                id(baby_monitor_abort)();
             - microphone.mute: i2s_mics
             - voice_assistant.stop:
                 id: va

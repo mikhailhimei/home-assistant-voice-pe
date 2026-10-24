@@ -7,6 +7,8 @@ from esphome.const import CONF_ID, CONF_MICROPHONE
 
 from esphome.components import microphone, socket
 
+MULTI_CONF = True
+
 DEPENDENCIES = ["microphone", "network"]
 AUTO_LOAD = ["socket"]
 ns = cg.esphome_ns.namespace("baby_monitor")
@@ -15,6 +17,7 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(BabyMonitor),
+            cv.Optional("passive", default=False): cv.boolean,
             cv.Required(CONF_MICROPHONE): microphone.microphone_source_schema(),
             cv.Optional("host", default="auto"): cv.Any(
                 cv.one_of("auto"), cv.ipv4address
@@ -45,7 +48,7 @@ FINAL_VALIDATE_SCHEMA = cv.Schema(
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-    source = await microphone.microphone_source_to_code(config[CONF_MICROPHONE])
+    source = await microphone.microphone_source_to_code(config[CONF_MICROPHONE], passive=config["passive"])
     cg.add(var.set_microphone(source))
     cg.add(
         var.configure(
