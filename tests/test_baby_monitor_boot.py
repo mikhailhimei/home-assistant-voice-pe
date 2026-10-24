@@ -44,6 +44,7 @@ class MonitorBootTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             merged = yaml.load(result.stdout, Loader=yaml.BaseLoader)
+            merged["baby_monitor"] = merged["baby_monitor"][0]
             switch = next(
                 s for s in merged["switch"] if s.get("id") == "baby_monitor_switch"
             )
