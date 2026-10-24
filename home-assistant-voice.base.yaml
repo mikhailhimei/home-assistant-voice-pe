@@ -1,5 +1,5 @@
 substitutions:
-  voice_pe_audio_ref: feat/speaker-calls
+  voice_pe_audio_ref: 56d052a15374e58a72cef3a6b3831669fae6e8e5
   dialog_alarm_entity: sensor.dialog_custom_ui_alarm
   dialog_timer_entity: sensor.dialog_custom_ui_timers
   dialog_timer_device_id: "f78b84553b463617269c25293950bb55"
