@@ -18,21 +18,6 @@ baby_monitor:
       channels: [0]
     passive: true
 
-# Persisted per-speaker setting exposed in Home Assistant's device settings.
-select:
-  - platform: template
-    id: call_ringtone
-    name: "Мелодия звонка"
-    icon: mdi:music-note
-    entity_category: config
-    optimistic: true
-    restore_value: true
-    initial_option: "Стандартная"
-    options:
-      - "Стандартная"
-      - "Сигнал таймера"
-      - "Сигнал пробуждения"
-      - "Без звука"
 
 light:
   - id: !extend voice_assistant_leds
@@ -77,6 +62,9 @@ esphome:
             state: idle
 
 globals:
+  - id: call_ringtone_url
+    type: std::string
+    initial_value: '""'
   - id: call_incoming
     type: bool
     initial_value: 'false'
@@ -100,6 +88,11 @@ api:
         key: string
       then:
         - lambda: id(call_uplink).provision(std::string(key.c_str()));
+    - action: call_ringtone_configure
+      variables:
+        url: string
+      then:
+        - lambda: id(call_ringtone_url) = url;
     - action: call_ring
       variables:
         incoming: bool
@@ -125,6 +118,7 @@ api:
               lambda: return id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state;
             then:
               - script.stop: call_ring_tone
+              - script.execute: call_stop_custom_ringtone
               - lambda: |-
                   id(call_ringing) = false;
                   id(call_status).publish_state("connecting");
@@ -155,6 +149,15 @@ api:
         - script.execute: call_end_local
 
 script:
+  - id: call_stop_custom_ringtone
+    then:
+      - if:
+          condition:
+            lambda: return id(call_incoming) && id(call_ringing) && !id(call_ringtone_url).empty();
+          then:
+            - media_player.stop:
+                id: external_media_player
+                announcement: true
   - id: call_end_local
     mode: restart
     then:
@@ -163,6 +166,7 @@ script:
             lambda: return id(speaker_call_active);
           then:
             - script.stop: call_ring_tone
+            - script.execute: call_stop_custom_ringtone
             - lambda: |-
                 id(call_uplink).disable();
                 id(call_ringing) = false;
@@ -184,15 +188,26 @@ script:
           then:
             - if:
                 condition:
-                  lambda: return id(call_incoming) && id(call_ringtone).current_option() != "Без звука";
+                  lambda: return id(call_incoming);
                 then:
-                  - script.execute:
-                      id: play_sound
-                      priority: false
-                      sound_file: !lambda |-
-                        if (id(call_ringtone).current_option() == "Сигнал таймера") return std::string("timer_finished_sound");
-                        if (id(call_ringtone).current_option() == "Сигнал пробуждения") return std::string("wake_word_triggered_sound");
-                        return std::string("center_button_double_press_sound");
+                  - if:
+                      condition:
+                        lambda: return !id(call_ringtone_url).empty();
+                      then:
+                        - if:
+                            condition:
+                              not:
+                                media_player.is_announcing: external_media_player
+                            then:
+                              - media_player.play_media:
+                                  id: external_media_player
+                                  media_url: !lambda return id(call_ringtone_url);
+                                  announcement: true
+                      else:
+                        - script.execute:
+                            id: play_sound
+                            priority: false
+                            sound_file: center_button_double_press_sound
             - delay: 4s
 
 interval:
