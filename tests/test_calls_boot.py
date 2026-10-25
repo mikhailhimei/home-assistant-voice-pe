@@ -39,6 +39,12 @@ class CallsBootTests(unittest.TestCase):
                     if with_radio:
                         self.assertEqual(uplinks["monitor_uplink"]["passive"], "false")
                         self.assertEqual(uplinks["monitor_uplink"]["port"], "8124")
+                    ringtone = next(item for item in merged["select"] if item["id"] == "call_ringtone")
+                    self.assertEqual(ringtone["initial_option"], "Стандартная")
+                    self.assertEqual(ringtone["restore_value"], "true")
+                    self.assertIn("Без звука", ringtone["options"])
+                    ring = next(item for item in merged["light"] if item["id"] == "voice_assistant_leds")
+                    self.assertTrue(any(effect.get("addressable_lambda", {}).get("name") == "Call ringing" for effect in ring["effects"]))
                     self.assertIn("micro_wake_word", merged)
                     self.assertIn("voice_assistant", merged)
                     self.assertEqual(len(merged["display"]), 1)

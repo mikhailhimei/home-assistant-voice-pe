@@ -142,6 +142,9 @@ globals:
   - id: speaker_call_active
     type: bool
     initial_value: 'false'
+  - id: speaker_call_connected
+    type: bool
+    initial_value: 'false'
   - id: speaker_call_button
     type: std::function<void()>
     initial_value: '[]() {}'
@@ -1307,6 +1310,19 @@ script:
       - lambda: |
           if (id(voice_kit_component).is_failed()) {
             id(control_leds_voice_kit_startup_failed).execute();
+            return;
+          }
+          if (id(speaker_call_active)) {
+            auto call = id(voice_assistant_leds).turn_on();
+            call.set_brightness(max(id(led_ring).remote_values.get_brightness(), 0.05f));
+            if (id(speaker_call_connected)) {
+              call.set_effect("None");
+              call.set_rgb(0.0f, 1.0f, 0.0f);
+            } else {
+              call.set_effect("Call ringing");
+              call.set_rgb(0.0f, 0.25f, 1.0f);
+            }
+            call.perform();
             return;
           }
           if (id(baby_monitor_active)) {

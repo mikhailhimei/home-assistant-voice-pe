@@ -18,6 +18,37 @@ baby_monitor:
       channels: [0]
     passive: true
 
+# Persisted per-speaker setting exposed in Home Assistant's device settings.
+select:
+  - platform: template
+    id: call_ringtone
+    name: "Мелодия звонка"
+    icon: mdi:music-note
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_option: "Стандартная"
+    options:
+      - "Стандартная"
+      - "Сигнал таймера"
+      - "Сигнал пробуждения"
+      - "Без звука"
+
+light:
+  - id: !extend voice_assistant_leds
+    effects:
+      - addressable_lambda:
+          name: "Call ringing"
+          update_interval: 80ms
+          lambda: |-
+            static uint8_t position = 0;
+            if (initial_run) position = 0;
+            it.all() = Color::BLACK;
+            for (uint8_t tail = 0; tail < 4; tail++) {
+              it[(position + it.size() - tail) % it.size()] = Color(0, 64, 255) * (255 - tail * 55);
+            }
+            position = (position + 1) % it.size();
+
 media_source:
   - platform: baby_monitor
     id: call_http_source
@@ -79,9 +110,11 @@ api:
             then:
               - lambda: |-
                   id(speaker_call_active) = true;
+                  id(speaker_call_connected) = false;
                   id(call_incoming) = incoming;
                   id(call_ringing) = true;
                   id(call_status).publish_state(incoming ? "ringing" : "outgoing");
+              - script.execute: control_leds
               - script.execute: call_ring_tone
             else:
               - script.execute: call_end_local
@@ -110,9 +143,11 @@ api:
                   id: external_media_player
                   media_url: !lambda return "monitor+" + std::string(url.c_str());
                   announcement: false
+              - lambda: id(speaker_call_connected) = true;
               - text_sensor.template.publish:
                   id: call_status
                   state: active
+              - script.execute: control_leds
             else:
               - script.execute: call_end_local
     - action: call_end
@@ -132,6 +167,7 @@ script:
                 id(call_uplink).disable();
                 id(call_ringing) = false;
                 id(speaker_call_active) = false;
+                id(speaker_call_connected) = false;
             - media_player.stop:
                 id: external_media_player
                 announcement: false
@@ -148,12 +184,15 @@ script:
           then:
             - if:
                 condition:
-                  lambda: return id(call_incoming);
+                  lambda: return id(call_incoming) && id(call_ringtone).current_option() != "Без звука";
                 then:
                   - script.execute:
                       id: play_sound
                       priority: false
-                      sound_file: center_button_double_press_sound
+                      sound_file: !lambda |-
+                        if (id(call_ringtone).current_option() == "Сигнал таймера") return std::string("timer_finished_sound");
+                        if (id(call_ringtone).current_option() == "Сигнал пробуждения") return std::string("wake_word_triggered_sound");
+                        return std::string("center_button_double_press_sound");
             - delay: 4s
 
 interval:
