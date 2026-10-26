@@ -549,25 +549,9 @@ switch:
                 auto mute = id(external_media_player).make_call();
                 mute.set_command(id(alert_previous_mute) ? media_player::MEDIA_PLAYER_COMMAND_MUTE : media_player::MEDIA_PLAYER_COMMAND_UNMUTE);
                 mute.perform();
-            # Voice dismissal does not enter on_listening, so acknowledge the
-            # activation here. Other stop methods retain the completion cue.
-            - if:
-                condition:
-                  lambda: return id(alert_stop_reason) == "voice";
-                then:
-                  - if:
-                      condition:
-                        switch.is_on: wake_sound
-                      then:
-                        - script.execute:
-                            id: play_sound
-                            priority: true
-                            sound_file: wake_word_triggered_sound
-                else:
-                  - script.execute:
-                      id: play_sound
-                      priority: true
-                      sound_file: completed_sound
+            - script.execute:
+                id: play_alert_stopped_sound
+                by_voice: !lambda return id(alert_stop_reason) == "voice";
             - if:
                 condition:
                   lambda: return id(alert_resume_media);
@@ -585,6 +569,7 @@ switch:
       # Refresh the LED ring
       - script.execute: control_leds
     on_turn_on:
+      - script.stop: play_alert_stopped_sound
       - lambda: |-
           id(alert_stop_reason) = "script";
           id(alert_snapshot_valid) = true;
@@ -1904,6 +1889,33 @@ script:
           id: external_media_player
           pipeline: announcement
           delay: 0ms
+
+  # STOP is queued by the player. Let it finish before queuing the cue,
+  # and avoid play_sound(priority=true), which would enqueue another STOP.
+  - id: play_alert_stopped_sound
+    mode: restart
+    parameters:
+      by_voice: bool
+    then:
+      - delay: 100ms
+      - wait_until:
+          condition:
+            lambda: |-
+              return id(external_media_player).state != media_player::MEDIA_PLAYER_STATE_ANNOUNCING &&
+                  id(announcement_mixing_input).is_stopped();
+          timeout: 3s
+      - if:
+          condition:
+            lambda: |-
+              return !id(timer_ringing).state && !id(va).is_running() &&
+                  id(external_media_player).state != media_player::MEDIA_PLAYER_STATE_ANNOUNCING &&
+                  id(announcement_mixing_input).is_stopped() && (!by_voice || id(wake_sound).state);
+          then:
+            - script.execute:
+                id: play_sound
+                priority: false
+                sound_file: !lambda |-
+                  return by_voice ? "wake_word_triggered_sound" : "completed_sound";
 
   - id: play_completed_sound
     mode: restart
