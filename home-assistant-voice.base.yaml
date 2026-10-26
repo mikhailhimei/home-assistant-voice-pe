@@ -549,6 +549,11 @@ switch:
                 auto mute = id(external_media_player).make_call();
                 mute.set_command(id(alert_previous_mute) ? media_player::MEDIA_PLAYER_COMMAND_MUTE : media_player::MEDIA_PLAYER_COMMAND_UNMUTE);
                 mute.perform();
+            # Acknowledge a real alert stop once, after disabling the ring loop.
+            - script.execute:
+                id: play_sound
+                priority: true
+                sound_file: completed_sound
             - if:
                 condition:
                   lambda: return id(alert_resume_media);
