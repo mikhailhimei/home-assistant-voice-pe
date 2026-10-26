@@ -495,6 +495,13 @@ switch:
     on_turn_off:
       # Disable stop wake word
       - micro_wake_word.disable_model: stop
+      - if:
+          condition:
+            not:
+              voice_assistant.connected:
+          then:
+            - micro_wake_word.stop:
+                id: mww
       - script.execute: disable_repeat
       # Stop any current announcement (ie: stop the timer ring mid playback)
       - if:
@@ -563,8 +570,14 @@ switch:
           id: media_mixing_input
           decibel_reduction: 20
           duration: 0.0s
-      # Enable stop wake word
+      # Keep local stop detection available even if the Assist connection drops.
       - micro_wake_word.enable_model: stop
+      - if:
+          condition:
+            switch.is_off: master_mute_switch
+          then:
+            - micro_wake_word.start:
+                id: mww
       # Ring timer
       - script.execute: ring_timer
       # Refresh LED
@@ -2247,8 +2260,12 @@ voice_assistant:
     - script.execute: control_leds
   on_client_disconnected:
     - voice_assistant.stop:
-    - micro_wake_word.stop:
-        id: mww
+    - if:
+        condition:
+          switch.is_off: timer_ringing
+        then:
+          - micro_wake_word.stop:
+              id: mww
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
     - script.execute: control_leds
   on_error:
