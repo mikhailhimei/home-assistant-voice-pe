@@ -140,8 +140,6 @@ api:
               switch.is_on: timer_ringing
             then:
               - switch.turn_off: timer_ringing
-        - lambda: |-
-            if (id(speaker_call_active)) id(speaker_call_abort)();
   encryption:   # Uses key set by Home Assistant
 
 ota:
