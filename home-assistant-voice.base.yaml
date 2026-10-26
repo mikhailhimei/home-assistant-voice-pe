@@ -120,6 +120,28 @@ api:
     - script.execute: control_leds
   on_client_disconnected:
     - script.execute: control_leds
+  actions:
+    - action: alert_start
+      variables:
+        url: string
+      then:
+        - lambda: id(alert_sound_url) = url;
+        - if:
+            condition:
+              switch.is_on: timer_ringing
+            then:
+              - script.execute: ring_timer
+            else:
+              - switch.turn_on: timer_ringing
+    - action: activity_stop
+      then:
+        - if:
+            condition:
+              switch.is_on: timer_ringing
+            then:
+              - switch.turn_off: timer_ringing
+        - lambda: |-
+            if (id(speaker_call_active)) id(speaker_call_abort)();
   encryption:   # Uses key set by Home Assistant
 
 ota:
@@ -138,6 +160,27 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
+  - id: alert_sound_url
+    type: std::string
+    initial_value: '""'
+  - id: alert_snapshot_valid
+    type: bool
+    initial_value: 'false'
+  - id: alert_previous_volume
+    type: float
+    initial_value: '0.5'
+  - id: alert_previous_mute
+    type: bool
+    initial_value: 'false'
+  - id: alert_resume_media
+    type: bool
+    initial_value: 'false'
+  - id: alert_started_at
+    type: uint32_t
+    initial_value: '0'
+  - id: alert_silent_since
+    type: uint32_t
+    initial_value: '0'
   # Optional calls keep Assist active; these hooks are inert without calls.yaml.
   - id: speaker_call_active
     type: bool
@@ -382,6 +425,23 @@ interval:
     then:
       - if:
           condition:
+            switch.is_on: timer_ringing
+          then:
+            - media_player.volume_set:
+                id: external_media_player
+                volume: !lambda return std::min(0.70f, 0.30f + 0.01f * ((millis() - id(alert_started_at)) / 1000.0f));
+            - lambda: |-
+                if (id(external_media_player).state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING) {
+                  id(alert_silent_since) = millis();
+                } else if (millis() - id(alert_silent_since) > 10000) {
+                  id(alert_sound_url).clear();
+                  id(alert_silent_since) = millis();
+                  id(ring_timer).execute();
+                }
+  - interval: 1s
+    then:
+      - if:
+          condition:
             lambda: return !id(api_id).is_connected() && (id(dialog_timer_active) || id(dialog_alarm_active));
           then:
             - lambda: |-
@@ -450,9 +510,54 @@ switch:
           id: media_mixing_input
           decibel_reduction: 0
           duration: 1.0s
+      - lambda: id(alert_sound_url).clear();
+      - if:
+          condition:
+            lambda: return id(alert_snapshot_valid);
+          then:
+            - lambda: |-
+                auto volume = id(external_media_player).make_call();
+                volume.set_volume(id(alert_previous_volume));
+                volume.perform();
+                auto mute = id(external_media_player).make_call();
+                mute.set_command(id(alert_previous_mute) ? media_player::MEDIA_PLAYER_COMMAND_MUTE : media_player::MEDIA_PLAYER_COMMAND_UNMUTE);
+                mute.perform();
+            - if:
+                condition:
+                  lambda: return id(alert_resume_media);
+                then:
+                  - media_player.play:
+                      id: external_media_player
+                      announcement: false
+            - lambda: |-
+                id(alert_resume_media) = false;
+                id(alert_snapshot_valid) = false;
       # Refresh the LED ring
       - script.execute: control_leds
     on_turn_on:
+      - lambda: |-
+          id(alert_snapshot_valid) = true;
+          id(alert_previous_volume) = id(external_media_player).volume;
+          id(alert_previous_mute) = id(external_media_player).is_muted();
+          id(alert_resume_media) = !id(speaker_call_active) && !id(baby_monitor_active) &&
+              (id(external_media_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING ||
+               id(http_media_source).get_state() == media_source::MediaSourceState::PLAYING ||
+               id(sendspin_media_source).get_state() == media_source::MediaSourceState::PLAYING);
+          id(alert_started_at) = millis();
+          id(alert_silent_since) = millis();
+          if (id(speaker_call_active)) id(speaker_call_abort)();
+          if (id(baby_monitor_active)) id(baby_monitor_abort)();
+      - if:
+          condition:
+            lambda: return id(alert_resume_media);
+          then:
+            - media_player.pause:
+                id: external_media_player
+                announcement: false
+      - media_player.unmute: external_media_player
+      - media_player.volume_set:
+          id: external_media_player
+          volume: 30%
       # Duck audio
       - mixer_speaker.apply_ducking:
           id: media_mixing_input
@@ -464,9 +569,6 @@ switch:
       - script.execute: ring_timer
       # Refresh LED
       - script.execute: control_leds
-      # If 15 minutes have passed and the timer is still ringing, stop it.
-      - delay: 15min
-      - switch.turn_off: timer_ringing
   - platform: gpio
     pin: GPIO47
     id: internal_speaker_amp
@@ -514,10 +616,11 @@ binary_sensor:
         then:
           - if:
               condition:
-                lambda: return id(baby_monitor_active) || id(speaker_call_active);
+                lambda: return id(timer_ringing).state || id(baby_monitor_active) || id(speaker_call_active);
               then:
                 - lambda: |-
-                    if (id(speaker_call_active)) id(speaker_call_button)();
+                    if (id(timer_ringing).state) id(timer_ringing).turn_off();
+                    else if (id(speaker_call_active)) id(speaker_call_button)();
                     else id(baby_monitor_abort)();
               else:
                 - if:
@@ -1692,12 +1795,22 @@ script:
 
   # Script executed when the timer is ringing, to playback sounds.
   - id: ring_timer
+    mode: restart
     then:
       - script.execute: enable_repeat_one
-      - script.execute:
-          id: play_sound
-          priority: true
-          sound_file: "timer_finished_sound"
+      - if:
+          condition:
+            lambda: return !id(alert_sound_url).empty();
+          then:
+            - media_player.play_media:
+                id: external_media_player
+                media_url: !lambda return id(alert_sound_url);
+                announcement: true
+          else:
+            - script.execute:
+                id: play_sound
+                priority: true
+                sound_file: "timer_finished_sound"
 
   # Script executed when the timer is ringing, to repeat the timer finished sound.
   - id: enable_repeat_one
@@ -1728,7 +1841,7 @@ script:
     then:
       - if:
           condition:
-            lambda: return id(command_processed) && !id(command_failed) && !id(response_has_speech);
+            lambda: return !id(timer_ringing).state && id(command_processed) && !id(command_failed) && !id(response_has_speech);
           then:
             - wait_until:
                 condition:
@@ -1742,7 +1855,7 @@ script:
                         voice_assistant.is_running:
                     - not:
                         media_player.is_announcing: external_media_player
-                    - lambda: return id(command_processed) && !id(command_failed) && !id(response_has_speech);
+                    - lambda: return !id(timer_ringing).state && id(command_processed) && !id(command_failed) && !id(response_has_speech);
                 then:
                   - script.execute:
                       id: play_sound

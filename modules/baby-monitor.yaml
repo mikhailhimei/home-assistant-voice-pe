@@ -41,7 +41,7 @@ switch:
     turn_on_action:
       - if:
           condition:
-            lambda: return !id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+            lambda: return !id(timer_ringing).state && !id(speaker_call_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
           then:
             - if:
                 condition:
@@ -74,7 +74,7 @@ switch:
     turn_on_action:
       - if:
           condition:
-            lambda: return !id(speaker_call_active) && !id(baby_listener_url).empty() && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+            lambda: return !id(timer_ringing).state && !id(speaker_call_active) && !id(baby_listener_url).empty() && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
           then:
             - if:
                 condition:

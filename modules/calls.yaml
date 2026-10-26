@@ -99,7 +99,7 @@ api:
       then:
         - if:
             condition:
-              lambda: return !id(baby_monitor_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
+              lambda: return !id(timer_ringing).state && !id(baby_monitor_active) && !id(software_microphone_muted) && !id(hardware_mute_switch).state && id(api_id).is_connected();
             then:
               - lambda: |-
                   id(speaker_call_active) = true;
