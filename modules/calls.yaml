@@ -27,12 +27,23 @@ light:
           update_interval: 80ms
           lambda: |-
             static uint8_t position = 0;
-            if (initial_run) position = 0;
-            it.all() = Color::BLACK;
-            for (uint8_t tail = 0; tail < 4; tail++) {
-              it[(position + it.size() - tail) % it.size()] = Color(0, 64, 255) * (255 - tail * 55);
+            static uint8_t blink_tick = 0;
+            if (initial_run) {
+              position = 0;
+              blink_tick = 0;
             }
-            position = (position + 1) % it.size();
+            it.all() = Color::BLACK;
+            if (id(call_incoming)) {
+              // Incoming: the whole blue ring blinks, 480 ms on / 480 ms off.
+              if (blink_tick < 6) it.all() = Color(0, 64, 255);
+              blink_tick = (blink_tick + 1) % 12;
+            } else {
+              // Outgoing: retain the rotating blue trail.
+              for (uint8_t tail = 0; tail < 4; tail++) {
+                it[(position + it.size() - tail) % it.size()] = Color(0, 64, 255) * (255 - tail * 55);
+              }
+              position = (position + 1) % it.size();
+            }
 
 media_source:
   - platform: baby_monitor
