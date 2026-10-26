@@ -125,7 +125,22 @@ api:
       variables:
         url: string
       then:
-        - lambda: id(alert_sound_url) = url;
+        - lambda: id(alert_kind) = "timer"; id(alert_sound_url) = url;
+        - if:
+            condition:
+              switch.is_on: timer_ringing
+            then:
+              - script.execute: ring_timer
+            else:
+              - switch.turn_on: timer_ringing
+    - action: alert_start_v2
+      variables:
+        url: string
+        kind: string
+      then:
+        - lambda: |-
+            id(alert_kind) = kind == "alarm" ? "alarm" : "timer";
+            id(alert_sound_url) = url;
         - if:
             condition:
               switch.is_on: timer_ringing
@@ -139,6 +154,7 @@ api:
             condition:
               switch.is_on: timer_ringing
             then:
+              - lambda: id(alert_stop_reason) = "script";
               - switch.turn_off: timer_ringing
   encryption:   # Uses key set by Home Assistant
 
@@ -158,6 +174,12 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
+  - id: alert_kind
+    type: std::string
+    initial_value: '"timer"'
+  - id: alert_stop_reason
+    type: std::string
+    initial_value: '"script"'
   - id: alert_sound_url
     type: std::string
     initial_value: '""'
@@ -534,13 +556,18 @@ switch:
                   - media_player.play:
                       id: external_media_player
                       announcement: false
+            - event.trigger:
+                id: alert_stopped_event
+                event_type: !lambda return id(alert_kind) + "_stopped_by_" + id(alert_stop_reason);
             - lambda: |-
+                id(alert_kind) = "timer";
                 id(alert_resume_media) = false;
                 id(alert_snapshot_valid) = false;
       # Refresh the LED ring
       - script.execute: control_leds
     on_turn_on:
       - lambda: |-
+          id(alert_stop_reason) = "script";
           id(alert_snapshot_valid) = true;
           id(alert_previous_volume) = id(external_media_player).volume;
           id(alert_previous_mute) = id(external_media_player).is_muted();
@@ -568,8 +595,9 @@ switch:
           id: media_mixing_input
           decibel_reduction: 20
           duration: 0.0s
-      # Keep local stop detection available even if the Assist connection drops.
-      - micro_wake_word.enable_model: stop
+      # Only configured activation models may stop an alert; do not enable
+      # the internal stop-word model used for interrupting normal TTS.
+      - micro_wake_word.disable_model: stop
       - if:
           condition:
             switch.is_off: master_mute_switch
@@ -630,7 +658,7 @@ binary_sensor:
                 lambda: return id(timer_ringing).state || id(baby_monitor_active) || id(speaker_call_active);
               then:
                 - lambda: |-
-                    if (id(timer_ringing).state) id(timer_ringing).turn_off();
+                    if (id(timer_ringing).state) { id(alert_stop_reason) = "button"; id(timer_ringing).turn_off(); }
                     else if (id(speaker_call_active)) id(speaker_call_button)();
                     else id(baby_monitor_abort)();
               else:
@@ -1360,6 +1388,17 @@ sensor:
                       increase_hue: false
 
 event:
+  - platform: template
+    id: alert_stopped_event
+    name: "Alert stopped"
+    icon: mdi:alarm-off
+    event_types:
+      - alarm_stopped_by_voice
+      - timer_stopped_by_voice
+      - alarm_stopped_by_button
+      - timer_stopped_by_button
+      - alarm_stopped_by_script
+      - timer_stopped_by_script
   # Event entity exposed to the user to automate on complex center button presses.
   # The simple press is not exposed as it is used to control the device itself.
   - platform: template
@@ -2183,6 +2222,7 @@ micro_wake_word:
               condition:
                 switch.is_on: timer_ringing
               then:
+                - lambda: id(alert_stop_reason) = "voice";
                 - switch.turn_off: timer_ringing
               # Stop voice assistant if running
               else:
