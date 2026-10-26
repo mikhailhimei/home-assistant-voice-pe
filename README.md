@@ -82,10 +82,10 @@ wifi:
 1. Добавьте Voice PE в интеграцию **ESPHome** в Home Assistant.
 2. В интеграции **Время и дата / Time & Date** включите датчик `sensor.time`.
 3. Для таймеров и будильников обновите
-   [Custom-Dialog-UI](https://github.com/mikhailhimei/Custom-Dialog-UI)
+   [HA Dialog UI](https://github.com/mikhailhimei/ha-dialog-ui)
    и перезапустите Home Assistant.
-4. Проверьте наличие `sensor.dialog_custom_ui_timers` и
-   `sensor.dialog_custom_ui_alarm`, у обоих должен быть атрибут `payload`.
+4. Проверьте наличие `sensor.ha_dialog_ui_timers` и
+   `sensor.ha_dialog_ui_alarm`, у обоих должен быть атрибут `payload`.
 
 `payload` содержит список записей. Прошивка сама преобразует передаваемое
 Home Assistant Python-представление списка в JSON; `payload_json` не нужен.
@@ -103,7 +103,17 @@ Home Assistant Python-представление списка в JSON; `payload_
 ```
 
 При других именах датчиков также задайте `dialog_timer_entity` и
-`dialog_alarm_entity`.
+`dialog_alarm_entity`. Используйте именно **entity_id**, а не отображаемое имя.
+Если HA сохранил старые имена после обновления интеграции, укажите их явно:
+
+```yaml
+  dialog_timer_entity: sensor.dialog_custom_ui_timers
+  dialog_alarm_entity: sensor.dialog_custom_ui_alarm
+```
+
+Совпадения `device_id` достаточно, даже если сущность медиаплеера была
+переименована. После изменения подписок на сенсоры пересоберите и установите
+прошивку, затем создайте новый таймер для проверки.
 
 Поведение дисплея:
 
