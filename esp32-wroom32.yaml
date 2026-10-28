@@ -1,4 +1,4 @@
-# Minimal local wake-word experiment. Intended only for classic ESP32-WROOM-32.
+# ESP32-WROOM-32: local wake word, then Home Assistant Assist (no audio output).
 substitutions:
   name: esphome-web-619b9c
   friendly_name: ESP32 Microphone
@@ -19,6 +19,16 @@ esphome:
     priority: -100
     then:
       - script.execute: start_wake_detection
+
+globals:
+  - id: assist_requested
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: assist_started_at
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
 
 esp32:
   board: esp32dev
@@ -92,7 +102,7 @@ micro_wake_word:
     microphone: inmp441_microphone
     channels: 0
     gain_factor: ${microphone_gain}
-  stop_after_detection: false
+  stop_after_detection: true
   models:
     - model: ${wake_word_model}
       id: selected_wake_word
@@ -100,6 +110,81 @@ micro_wake_word:
   on_wake_word_detected:
     - lambda: |-
         ESP_LOGI("wake_word", "1");
+    - if:
+        condition:
+          and:
+            - voice_assistant.connected:
+                id: assist
+            - lambda: return !id(assist_requested) && !id(assist).is_running();
+        then:
+          - lambda: |-
+              id(assist_requested) = true;
+              id(assist_started_at) = 0;
+          - script.execute:
+              id: start_assist
+              detected_word: !lambda return wake_word;
+        else:
+          - logger.log:
+              level: WARN
+              tag: wroom_assist
+              format: "Assist is unavailable or already busy; returning to wake-word detection"
+          - script.execute: resume_wake_detection
+
+voice_assistant:
+  id: assist
+  microphone:
+    microphone: inmp441_microphone
+    channels: 0
+    gain_factor: ${microphone_gain}
+  micro_wake_word: wake_detector
+  use_wake_word: false
+  on_client_connected:
+    - logger.log:
+        level: INFO
+        tag: wroom_assist
+        format: "Home Assistant Assist connected"
+    - script.execute: start_wake_detection
+  on_client_disconnected:
+    - logger.log:
+        level: WARN
+        tag: wroom_assist
+        format: "Home Assistant Assist disconnected"
+    - voice_assistant.stop:
+        id: assist
+    - script.execute: resume_wake_detection
+  on_start:
+    - logger.log:
+        level: INFO
+        tag: wroom_assist
+        format: "Assist request started"
+  on_listening:
+    - logger.log:
+        level: INFO
+        tag: wroom_assist
+        format: "Listening for command"
+  on_stt_end:
+    - lambda: |-
+        ESP_LOGI("wroom_assist", "Recognized command: %s", x.c_str());
+  on_intent_end:
+    - logger.log:
+        level: INFO
+        tag: wroom_assist
+        format: "Home Assistant finished processing the intent"
+  on_tts_start:
+    - lambda: |-
+        ESP_LOGI("wroom_assist", "Response text: %s", x.c_str());
+  on_end:
+    - logger.log:
+        level: INFO
+        tag: wroom_assist
+        format: "Assist request ended"
+    - script.execute: resume_wake_detection
+  on_error:
+    - lambda: |-
+        ESP_LOGW("wroom_assist", "Assist error [%s]: %s", code.c_str(), message.c_str());
+    - voice_assistant.stop:
+        id: assist
+    - script.execute: resume_wake_detection
 
 script:
   - id: start_wake_detection
@@ -111,7 +196,7 @@ script:
           timeout: 15s
       - if:
           condition:
-            lambda: return id(wake_detector).is_ready() && !id(wake_detector).is_failed() && !id(wake_detector).is_running();
+            lambda: return !id(assist_requested) && !id(assist).is_running() && id(wake_detector).is_ready() && !id(wake_detector).is_failed() && !id(wake_detector).is_running();
           then:
             - micro_wake_word.enable_model: selected_wake_word
             - logger.log:
@@ -121,13 +206,68 @@ script:
             - micro_wake_word.start:
                 id: wake_detector
 
+
+  - id: start_assist
+    mode: single
+    parameters:
+      detected_word: string
+    then:
+      - micro_wake_word.stop:
+          id: wake_detector
+      - wait_until:
+          condition:
+            lambda: return !id(wake_detector).is_running() && id(inmp441_microphone).is_stopped();
+          timeout: 5s
+      - if:
+          condition:
+            and:
+              - voice_assistant.connected:
+                  id: assist
+              - lambda: return id(assist_requested) && !id(assist).is_running() && !id(wake_detector).is_running() && id(inmp441_microphone).is_stopped();
+          then:
+            - lambda: id(assist_started_at) = millis();
+            - voice_assistant.start:
+                id: assist
+                wake_word: !lambda return detected_word;
+          else:
+            - logger.log:
+                level: WARN
+                tag: wroom_assist
+                format: "Could not hand microphone to Assist"
+            - script.execute: resume_wake_detection
+
+  - id: resume_wake_detection
+    mode: restart
+    then:
+      - delay: 250ms
+      - wait_until:
+          condition:
+            lambda: return !id(assist).is_running() && !id(wake_detector).is_running();
+          timeout: 15s
+      - if:
+          condition:
+            lambda: return !id(assist).is_running() && !id(wake_detector).is_running();
+          then:
+            - lambda: |-
+                id(assist_requested) = false;
+                id(assist_started_at) = 0;
+            - script.execute: start_wake_detection
+
+
 interval:
   - interval: 10s
     then:
       - lambda: |-
-          ESP_LOGI("wroom_status", "detector_running=%d microphone_running=%d detector_failed=%d",
+          ESP_LOGI("wroom_status", "detector_running=%d microphone_running=%d detector_failed=%d assist_running=%d assist_requested=%d",
               id(wake_detector).is_running(), id(inmp441_microphone).is_running(),
-              id(wake_detector).is_failed());
+              id(wake_detector).is_failed(), id(assist).is_running(), id(assist_requested));
+          if (id(assist_requested) && id(assist_started_at) != 0 &&
+              millis() - id(assist_started_at) > 60000) {
+            ESP_LOGW("wroom_assist", "Assist request timed out after 60 seconds");
+            id(assist_started_at) = 0;
+            id(assist).request_stop();
+            id(resume_wake_detection).execute();
+          }
 
 button:
   - platform: template
