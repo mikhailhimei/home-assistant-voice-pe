@@ -3,6 +3,9 @@ substitutions:
   name: esphome-web-619b9c
   friendly_name: ESP32 Microphone
   wake_word_model: https://github.com/kahrendt/microWakeWord/releases/download/okay_nabu_20241226.3/okay_nabu.json
+  wake_word_probability_cutoff: "0.69"
+  microphone_gain: "1"
+  microphone_channel: left
   microphone_sck_pin: GPIO26
   microphone_ws_pin: GPIO25
   microphone_sd_pin: GPIO33
@@ -15,8 +18,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - micro_wake_word.start:
-          id: wake_detector
+      - script.execute: start_wake_detection
 
 esp32:
   board: esp32dev
@@ -29,6 +31,8 @@ logger:
   baud_rate: 115200
 
 api:
+  on_client_connected:
+    - script.execute: start_wake_detection
 
 ota:
   - platform: esphome
@@ -49,21 +53,85 @@ microphone:
     adc_type: external
     i2s_din_pin: ${microphone_sd_pin}
     pdm: false
-    channel: left
+    channel: ${microphone_channel}
     sample_rate: 16000
     bits_per_sample: 32bit
     correct_dc_offset: true
+    on_data:
+      - lambda: |-
+          static uint32_t last_log = 0;
+          static uint32_t samples = 0;
+          static uint32_t peak = 0;
+          static uint64_t magnitude_sum = 0;
+          const uint32_t now = millis();
+          if (last_log == 0) last_log = now;
+          for (size_t offset = 0; offset + sizeof(int32_t) <= x.size(); offset += sizeof(int32_t)) {
+            int32_t raw;
+            memcpy(&raw, x.data() + offset, sizeof(raw));
+            const int32_t sample = raw / 65536;
+            const uint32_t magnitude = sample < 0 ? -sample : sample;
+            if (magnitude > peak) peak = magnitude;
+            magnitude_sum += magnitude;
+            samples++;
+          }
+          const uint32_t elapsed = now - last_log;
+          if (elapsed >= 5000) {
+            ESP_LOGI("mic_audio", "samples_per_s=%u peak16=%u mean_abs16=%u",
+                static_cast<unsigned>(static_cast<uint64_t>(samples) * 1000 / elapsed),
+                static_cast<unsigned>(peak),
+                static_cast<unsigned>(samples ? magnitude_sum / samples : 0));
+            samples = 0;
+            peak = 0;
+            magnitude_sum = 0;
+            last_log = now;
+          }
 
 micro_wake_word:
   id: wake_detector
   microphone:
     microphone: inmp441_microphone
     channels: 0
-    gain_factor: 1
+    gain_factor: ${microphone_gain}
   stop_after_detection: false
   models:
     - model: ${wake_word_model}
       id: selected_wake_word
+      probability_cutoff: ${wake_word_probability_cutoff}
   on_wake_word_detected:
     - lambda: |-
         ESP_LOGI("wake_word", "1");
+
+script:
+  - id: start_wake_detection
+    mode: single
+    then:
+      - wait_until:
+          condition:
+            lambda: return id(wake_detector).is_ready();
+          timeout: 15s
+      - if:
+          condition:
+            lambda: return id(wake_detector).is_ready() && !id(wake_detector).is_failed() && !id(wake_detector).is_running();
+          then:
+            - micro_wake_word.enable_model: selected_wake_word
+            - logger.log:
+                level: INFO
+                tag: wroom_status
+                format: "Requesting wake-word detection start"
+            - micro_wake_word.start:
+                id: wake_detector
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          ESP_LOGI("wroom_status", "detector_running=%d microphone_running=%d detector_failed=%d",
+              id(wake_detector).is_running(), id(inmp441_microphone).is_running(),
+              id(wake_detector).is_failed());
+
+button:
+  - platform: template
+    name: "Start wake detection"
+    entity_category: diagnostic
+    on_press:
+      - script.execute: start_wake_detection
