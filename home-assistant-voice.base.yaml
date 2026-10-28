@@ -708,8 +708,7 @@ binary_sensor:
                                                   then:
                                                     # on_listening plays the shared listen.mp3 cue once ready.
                                                     - voice_assistant.start:
-      # Double Click
-      #  . Exposed as an event entity. To be used in automations inside Home Assistant
+      # Double Click: toggle software microphone mute; retain the HA event.
       - timing:
           - ON for at most 1s
           - OFF for at most 0.25s
@@ -720,6 +719,8 @@ binary_sensor:
               condition:
                 lambda: return !id(init_in_progress) && !id(color_changed) && !id(group_volume_changed) && !id(disable_buttons).state;
               then:
+                - lambda: id(software_microphone_muted) = !id(software_microphone_muted);
+                - script.execute: apply_microphone_mute
                 - script.execute:
                     id: play_sound
                     priority: false
