@@ -1,0 +1,69 @@
+# Minimal local wake-word experiment. Intended only for classic ESP32-WROOM-32.
+substitutions:
+  name: esphome-web-619b9c
+  friendly_name: ESP32 Microphone
+  wake_word_model: https://github.com/kahrendt/microWakeWord/releases/download/okay_nabu_20241226.3/okay_nabu.json
+  microphone_sck_pin: GPIO26
+  microphone_ws_pin: GPIO25
+  microphone_sd_pin: GPIO33
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -100
+    then:
+      - micro_wake_word.start:
+          id: wake_detector
+
+esp32:
+  board: esp32dev
+  variant: esp32
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  power_save_mode: none
+
+# INMP441: VDD=3V3, GND=GND, L/R=GND (left channel).
+i2s_audio:
+  - id: microphone_bus
+    i2s_bclk_pin: ${microphone_sck_pin}
+    i2s_lrclk_pin: ${microphone_ws_pin}
+
+microphone:
+  - platform: i2s_audio
+    id: inmp441_microphone
+    i2s_audio_id: microphone_bus
+    adc_type: external
+    i2s_din_pin: ${microphone_sd_pin}
+    pdm: false
+    channel: left
+    sample_rate: 16000
+    bits_per_sample: 32bit
+    correct_dc_offset: true
+
+micro_wake_word:
+  id: wake_detector
+  microphone:
+    microphone: inmp441_microphone
+    channels: 0
+    gain_factor: 1
+  stop_after_detection: false
+  models:
+    - model: ${wake_word_model}
+      id: selected_wake_word
+  on_wake_word_detected:
+    - lambda: |-
+        ESP_LOGI("wake_word", "1");

@@ -1,7 +1,3 @@
-# Primary configuration: Voice PE with two directly connected MAX7219 panels.
-substitutions:
-  max7219_num_chips: "2"
-
+# This experimental branch targets ESP32-WROOM-32, NOT Home Assistant Voice PE.
 packages:
-  voice_pe: !include home-assistant-voice.base.yaml
-  max7219_clock: !include modules/max7219-clock.yaml
+  esp32_wroom32: !include esp32-wroom32.yaml
