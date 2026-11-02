@@ -31,6 +31,7 @@ substitutions:
   completed_sound_file: https://raw.githubusercontent.com/mikhailhimei/home-assistant-voice-pe/dev/sounds/completed.mp3
   center_button_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_press.flac
   center_button_double_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_double_press.flac
+  reminder_sound_file: https://raw.githubusercontent.com/mikhailhimei/home-assistant-voice-pe/dev/sounds/reminder-soft.flac
   center_button_triple_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_triple_press.flac
   center_button_long_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_long_press.flac
   factory_reset_initiated_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/factory_reset_initiated.mp3
@@ -2002,7 +2003,7 @@ script:
       - media_player.enqueue:
           id: external_media_player
           announcement: true
-          media_url: audio-file://center_button_double_press_sound
+          media_url: audio-file://reminder_sound
       - media_player.enqueue:
           id: external_media_player
           announcement: true
@@ -2148,6 +2149,8 @@ sendspin:
   task_stack_in_psram: false
 
 audio_file:
+  - id: reminder_sound
+    file: ${reminder_sound_file}
   - id: center_button_press_sound
     file: ${center_button_press_sound_file}
   - id: center_button_double_press_sound

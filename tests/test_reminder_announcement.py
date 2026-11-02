@@ -25,9 +25,11 @@ class ReminderAnnouncementTests(unittest.TestCase):
         steps = self.script['then']
         queued = [step['media_player.enqueue'] for step in steps if 'media_player.enqueue' in step]
         self.assertEqual([step['media_url'] for step in queued],
-                         ['audio-file://center_button_double_press_sound', 'return url;'])
+                         ['audio-file://reminder_sound', 'return url;'])
         self.assertTrue(all(step['id'] == 'external_media_player' and step['announcement'] == 'true' for step in queued))
-        self.assertIn('center_button_double_press_sound', {item['id'] for item in self.config['audio_file']})
+        sound = next(item for item in self.config['audio_file'] if item['id'] == 'reminder_sound')
+        self.assertEqual(sound['file'], '${reminder_sound_file}')
+        self.assertTrue((ROOT / 'sounds/reminder-soft.flac').is_file())
         self.assertNotIn('media_player.stop', str(steps))
         self.assertNotIn('delay:', str(steps))
 
