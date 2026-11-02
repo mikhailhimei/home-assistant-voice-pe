@@ -31,7 +31,7 @@ substitutions:
   completed_sound_file: https://raw.githubusercontent.com/mikhailhimei/home-assistant-voice-pe/dev/sounds/completed.mp3
   center_button_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_press.flac
   center_button_double_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_double_press.flac
-  reminder_sound_file: https://raw.githubusercontent.com/mikhailhimei/home-assistant-voice-pe/dev/sounds/reminder-chime.flac
+  reminder_sound_file: https://raw.githubusercontent.com/mikhailhimei/home-assistant-voice-pe/dev/sounds/reminder-neutral-bass.flac
   center_button_triple_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_triple_press.flac
   center_button_long_press_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/center_button_long_press.flac
   factory_reset_initiated_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/factory_reset_initiated.mp3

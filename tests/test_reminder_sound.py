@@ -8,7 +8,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOUND = ROOT / 'sounds/reminder-chime.flac'
+SOUND = ROOT / 'sounds/reminder-neutral-bass.flac'
 
 
 class ReminderSoundTests(unittest.TestCase):
@@ -18,14 +18,14 @@ class ReminderSoundTests(unittest.TestCase):
             'stream=codec_name,sample_rate,channels,bits_per_raw_sample',
             '-of', 'json', str(SOUND),
         ]))['streams'][0]
-        self.assertEqual(metadata, {'codec_name': 'flac', 'sample_rate': '48000',
+        self.assertEqual(metadata, {'codec_name': 'flac', 'sample_rate': '24000',
                                     'channels': 1, 'bits_per_raw_sample': '16'})
         pcm = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', str(SOUND),
                                        '-f', 's16le', '-'])
         samples = array('h', pcm)
-        duration = len(samples) / 48000
-        self.assertGreater(duration, 1.0)
-        self.assertLess(duration, 1.6)
+        duration = len(samples) / 24000
+        self.assertGreater(duration, 1.7)
+        self.assertLess(duration, 2.0)
         peak = max(abs(value) for value in samples) / 32768
         rms = math.sqrt(sum((value / 32768) ** 2 for value in samples) / len(samples))
         self.assertGreater(peak, 0.75)
