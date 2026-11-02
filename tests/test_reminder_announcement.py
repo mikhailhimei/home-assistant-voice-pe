@@ -29,7 +29,8 @@ class ReminderAnnouncementTests(unittest.TestCase):
         self.assertTrue(all(step['id'] == 'external_media_player' and step['announcement'] == 'true' for step in queued))
         sound = next(item for item in self.config['audio_file'] if item['id'] == 'reminder_sound')
         self.assertEqual(sound['file'], '${reminder_sound_file}')
-        self.assertTrue((ROOT / 'sounds/reminder-soft.flac').is_file())
+        self.assertTrue((ROOT / 'sounds/reminder-chime.flac').is_file())
+        self.assertTrue(self.config['substitutions']['reminder_sound_file'].endswith('/sounds/reminder-chime.flac'))
         self.assertNotIn('media_player.stop', str(steps))
         self.assertNotIn('delay:', str(steps))
 
