@@ -1,40 +1,23 @@
 blueprint:
-  name: Voice PE — озвучить и показать на часах
+  name: Voice PE — управление экраном часов
   description: >-
-    Озвучить текст голосом Assist выбранной колонки и показать текст или картинку
-    на её матрице MAX7219. Картинка выбирается в выпадающем списке сценария.
-    При заполнении текста экрана и картинки показывается картинка.
-    После заданного времени матрица возвращается к часам/таймеру.
+    Показать текст или картинку на матрице MAX7219, затем вернуть часы/таймер.
+    Картинка выбирается в выпадающем списке сценария и имеет приоритет над текстом.
+    Пустые текст и картинка либо длительность 0 возвращают часы.
     Требуется действие matrix_show с параметром start_delay.
   domain: script
   input:
-    satellite:
-      name: Колонка для озвучки
-      description: Assist Satellite вашей Voice PE. Речь синтезируется её выбранным Assist-пайплайном.
-      selector:
-        entity:
-          filter:
-            - domain: assist_satellite
     matrix_action:
-      name: Действие матрицы этой же колонки
+      name: Действие матрицы колонки
       description: >-
-        Полное имя действия matrix_show той же Voice PE, например
+        Полное имя действия matrix_show нужной Voice PE, например
         esphome.home_assistant_voice_0ab77d_matrix_show.
         Для другой колонки создайте отдельный сценарий.
       selector:
         text:
-mode: queued
+mode: parallel
 max: 10
-variables:
-  voice_satellite: !input satellite
 fields:
-  speech:
-    name: Текст озвучки
-    description: Текст, который произнесёт выбранная колонка.
-    required: true
-    selector:
-      text:
-        multiline: true
   message:
     name: Текст на часах
     description: Необязательно. Длинный текст прокручивается; картинка имеет приоритет.
@@ -66,18 +49,18 @@ fields:
             value: bell
   duration:
     name: Время показа на часах
-    description: Секунды с начала показа, от 1 до 3600. Не определяет длительность речи.
+    description: Секунды с начала показа, от 0 до 3600; 0 — вернуть часы.
     required: false
     default: 10
     selector:
       number:
-        min: 1
+        min: 0
         max: 3600
         step: 1
         mode: box
         unit_of_measurement: s
   start_delay:
-    name: Задержка перед озвучкой и показом
+    name: Задержка перед показом
     required: false
     default: 0
     selector:
@@ -89,17 +72,10 @@ fields:
         unit_of_measurement: s
 sequence:
   - variables:
-      spoken_text: "{{ speech | default('', true) | string | trim }}"
       display_text: "{{ message | default('', true) | string | trim }}"
       display_icon: "{{ icon | default('none', true) | string | trim | lower }}"
       display_duration: "{{ duration | default(10) | int(10) }}"
-      announcement_delay: "{{ start_delay | default(0, true) | int(0) }}"
-  - if:
-      - condition: template
-        value_template: "{{ not spoken_text }}"
-    then:
-      - stop: Укажите текст озвучки.
-        error: true
+      display_delay: "{{ start_delay | default(0) | int(0) }}"
   - if:
       - condition: template
         value_template: "{{ display_icon not in ['none', 'smile', 'sad', 'heart', 'check', 'cross', 'bell'] }}"
@@ -108,24 +84,13 @@ sequence:
         error: true
   - if:
       - condition: template
-        value_template: "{{ display_duration < 1 or display_duration > 3600 or announcement_delay < 0 or announcement_delay > 3600 }}"
+        value_template: "{{ display_duration < 0 or display_duration > 3600 or display_delay < 0 or display_delay > 3600 }}"
     then:
-      - stop: Время показа должно быть от 1 до 3600 секунд, задержка — от 0 до 3600.
+      - stop: Время показа и задержка должны быть от 0 до 3600 секунд.
         error: true
-  - delay:
-      seconds: "{{ announcement_delay }}"
-  - if:
-      - condition: template
-        value_template: "{{ (display_text | length > 0) or display_icon != 'none' }}"
-    then:
-      - action: !input matrix_action
-        data:
-          message: "{{ display_text }}"
-          icon: "{{ display_icon }}"
-          duration: "{{ display_duration }}"
-          start_delay: 0
-  - action: assist_satellite.announce
-    target:
-      entity_id: "{{ voice_satellite }}"
+  - action: !input matrix_action
     data:
-      message: "{{ spoken_text }}"
+      message: "{{ display_text }}"
+      icon: "{{ display_icon }}"
+      duration: "{{ display_duration }}"
+      start_delay: "{{ display_delay }}"
