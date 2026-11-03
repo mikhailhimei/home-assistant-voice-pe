@@ -115,6 +115,13 @@ globals:
           if (cp >= 'a' && cp <= 'z') cp -= 32;
           if (cp >= 0x430 && cp <= 0x44f) cp -= 32;
           if (cp == 0x451) cp = 0x401;
+          // Unicode temperature units are two glyphs in the compact font.
+          if (cp == 0x2103 || cp == 0x2109) {
+            if (!columns.empty()) columns.push_back(0);
+            columns.insert(columns.end(), {2,5,2});  // Degree ring.
+            cp = cp == 0x2103 ? 'C' : 'F';
+          }
+          if (cp == 0x2212 || cp == 0x2013 || cp == 0x2014) cp = '-';
           uint8_t rows[5] = {6,1,2,0,2};
           switch (cp) {
             case 48: rows[0]=7; rows[1]=5; rows[2]=5; rows[3]=5; rows[4]=7; break;
@@ -162,6 +169,24 @@ globals:
             case 43: rows[0]=0; rows[1]=2; rows[2]=7; rows[3]=2; rows[4]=0; break;
             case 47: rows[0]=1; rows[1]=1; rows[2]=2; rows[3]=4; rows[4]=4; break;
             case 37: rows[0]=5; rows[1]=1; rows[2]=2; rows[3]=4; rows[4]=5; break;
+            case 0x00b0: rows[0]=2; rows[1]=5; rows[2]=2; rows[3]=0; rows[4]=0; break;  // Degree.
+            case 0x00b1: rows[0]=2; rows[1]=7; rows[2]=2; rows[3]=0; rows[4]=7; break;  // Plus/minus.
+            case 0x00d7: rows[0]=5; rows[1]=5; rows[2]=2; rows[3]=5; rows[4]=5; break;  // Multiply.
+            case 0x00f7: rows[0]=2; rows[1]=0; rows[2]=7; rows[3]=0; rows[4]=2; break;  // Divide.
+            case 61: rows[0]=0; rows[1]=7; rows[2]=0; rows[3]=7; rows[4]=0; break;
+            case 44: rows[0]=0; rows[1]=0; rows[2]=0; rows[3]=2; rows[4]=4; break;
+            case 59: rows[0]=0; rows[1]=2; rows[2]=0; rows[3]=2; rows[4]=4; break;
+            case 95: rows[0]=0; rows[1]=0; rows[2]=0; rows[3]=0; rows[4]=7; break;
+            case 40: rows[0]=1; rows[1]=2; rows[2]=2; rows[3]=2; rows[4]=1; break;
+            case 41: rows[0]=4; rows[1]=2; rows[2]=2; rows[3]=2; rows[4]=4; break;
+            case 91: rows[0]=3; rows[1]=2; rows[2]=2; rows[3]=2; rows[4]=3; break;
+            case 93: rows[0]=6; rows[1]=2; rows[2]=2; rows[3]=2; rows[4]=6; break;
+            case 60: rows[0]=1; rows[1]=2; rows[2]=4; rows[3]=2; rows[4]=1; break;
+            case 62: rows[0]=4; rows[1]=2; rows[2]=1; rows[3]=2; rows[4]=4; break;
+            case 35: rows[0]=5; rows[1]=7; rows[2]=5; rows[3]=7; rows[4]=5; break;
+            case 42: rows[0]=0; rows[1]=5; rows[2]=2; rows[3]=5; rows[4]=0; break;
+            case 39: rows[0]=2; rows[1]=2; rows[2]=0; rows[3]=0; rows[4]=0; break;
+            case 34: rows[0]=5; rows[1]=5; rows[2]=0; rows[3]=0; rows[4]=0; break;
             case 1041: rows[0]=7; rows[1]=4; rows[2]=7; rows[3]=5; rows[4]=7; break;
             case 1043: rows[0]=7; rows[1]=4; rows[2]=4; rows[3]=4; rows[4]=4; break;
             case 1044: rows[0]=2; rows[1]=5; rows[2]=5; rows[3]=7; rows[4]=5; break;

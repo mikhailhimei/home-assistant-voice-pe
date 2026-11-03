@@ -39,6 +39,7 @@ fields:
       text:
   icon:
     name: Иконка
+    description: Необязательно. Пустое поле означает показ текста без иконки.
     required: false
     default: none
     selector:
@@ -86,13 +87,13 @@ fields:
 sequence:
   - if:
       - condition: template
-        value_template: "{{ device_id | default(matrix_device_id, true) != matrix_device_id }}"
+        value_template: "{{ device_id is string and (device_id | trim) not in ['', matrix_device_id] }}"
     then:
       - stop: Этот сценарий привязан к другой колонке. Выберите сценарий нужной колонки.
         error: true
   - action: !input matrix_action
     data:
       message: "{{ message | default('', true) }}"
-      icon: "{{ icon | default('none', true) }}"
+      icon: "{{ (icon | default('', true) | string | trim | lower) or 'none' }}"
       duration: "{{ duration | default(5) | int }}"
       start_delay: "{{ start_delay | default(0) | int }}"

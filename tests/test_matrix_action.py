@@ -53,6 +53,17 @@ int main(){
   show("", "", 5); assert(max7219_overlay_duration==0);
   show("STOP", "", -1); assert(max7219_overlay_duration==0);
   assert(max7219_text_columns(std::string(1000,'A')).size()==255);
+  assert(max7219_text_columns("°")==std::vector<uint8_t>({2,5,2}));
+  assert(max7219_text_columns("23℃")==max7219_text_columns("23°C"));
+  assert(max7219_text_columns("23℉")==max7219_text_columns("23°F"));
+  assert(max7219_text_columns("−23°С")==max7219_text_columns("-23°C"));
+  assert(max7219_text_columns("—–")==max7219_text_columns("--"));
+  for (auto symbol : {"°","±","×","÷","=",",",";","_","(",")","[","]","<",">","#","*","'","\""}) {
+    assert(max7219_text_columns(symbol)!=max7219_text_columns("?"));
+    assert(max7219_text_columns(symbol).size()==3);
+  }
+  show("23°С", "", 5);
+  assert(!max7219_overlay_icon && max7219_overlay_columns==max7219_text_columns("23°C"));
 }
 '''
         with tempfile.TemporaryDirectory() as d:

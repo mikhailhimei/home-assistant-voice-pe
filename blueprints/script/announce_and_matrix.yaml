@@ -27,6 +27,7 @@ fields:
       text:
   icon:
     name: Картинка на часах
+    description: Необязательно. Можно не передавать поле или оставить его пустым для показа текста.
     required: false
     default: none
     selector:
@@ -73,7 +74,7 @@ fields:
 sequence:
   - variables:
       display_text: "{{ message | default('', true) | string | trim }}"
-      display_icon: "{{ icon | default('none', true) | string | trim | lower }}"
+      display_icon: "{{ (icon | default('', true) | string | trim | lower) or 'none' }}"
       display_duration: "{{ duration | default(10) | int(10) }}"
       display_delay: "{{ start_delay | default(0) | int(0) }}"
   - if:

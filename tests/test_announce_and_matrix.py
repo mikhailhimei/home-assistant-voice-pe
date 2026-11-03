@@ -64,6 +64,32 @@ class ClockDisplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.calls, [('matrix', {
             'message': 'Привет', 'icon': 'none', 'duration': 10, 'start_delay': 0})])
 
+    async def test_empty_icon_is_optional_for_temperature_text(self):
+        for icon in (None, '', '   ', 'none'):
+            with self.subTest(icon=icon):
+                self.calls.clear()
+                await self.run_script(message='23°С', icon=icon)
+                self.assertEqual(self.calls, [('matrix', {
+                    'message': '23°С', 'icon': 'none', 'duration': 10, 'start_delay': 0})])
+
+    async def test_original_matrix_blueprint_accepts_empty_icon(self):
+        blueprint = Blueprint(load_yaml(str(ROOT / 'blueprints/script/matrix_show.yaml')),
+                              schema=BLUEPRINT_SCHEMA, expected_domain='script')
+        inputs = BlueprintInputs(blueprint, {'use_blueprint': {'path': 'test', 'input': {
+            'target_device_id': 'kitchen-device', 'matrix_action': 'esphome.kitchen_matrix_show'}}})
+        inputs.validate()
+        config = inputs.async_substitute()
+        script = Script(self.hass, cv.SCRIPT_SCHEMA(config['sequence']), 'Original matrix', 'script')
+        for icon in (None, '', '   '):
+            self.calls.clear()
+            await script.async_run({**config['variables'], 'message': '23°С', 'icon': icon}, context=Context())
+            self.assertEqual(self.calls, [('matrix', {
+                'message': '23°С', 'icon': 'none', 'duration': 5, 'start_delay': 0})])
+        self.calls.clear()
+        await script.async_run({**config['variables'], 'device_id': 'another-device',
+                                'message': '23°С'}, context=Context())
+        self.assertEqual(self.calls, [])
+
     async def test_empty_fields_return_clock_without_speech(self):
         await self.run_script()
         self.assertEqual(self.calls, [('matrix', {
