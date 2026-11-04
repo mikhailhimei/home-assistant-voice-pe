@@ -186,6 +186,10 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
+  - id: reminder_previous_volume
+    type: float
+    restore_value: false
+    initial_value: '0.5'
   - id: alert_kind
     type: std::string
     initial_value: '"timer"'
@@ -2000,6 +2004,11 @@ script:
                     id: va
               - not:
                   media_player.is_announcing: external_media_player
+      - lambda: |-
+          id(reminder_previous_volume) = id(external_media_player).volume;
+      - media_player.volume_set:
+          id: external_media_player
+          volume: 80%
       - media_player.enqueue:
           id: external_media_player
           announcement: true
@@ -2017,6 +2026,16 @@ script:
           condition:
             not:
               media_player.is_announcing: external_media_player
+      - lambda: |-
+          if (id(timer_ringing).state && id(alert_snapshot_valid)) {
+            // An alert interrupted us: let it keep ringing, then restore the
+            // volume from before the reminder when that alert finishes.
+            id(alert_previous_volume) = id(reminder_previous_volume);
+          } else {
+            auto volume = id(external_media_player).make_call();
+            volume.set_volume(id(reminder_previous_volume));
+            volume.perform();
+          }
 
   # Script used to fetch the first active timer (Stored in global first_active_timer)
   - id: fetch_first_active_timer
